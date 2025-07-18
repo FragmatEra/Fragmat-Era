@@ -11,6 +11,7 @@ const transporter = nodemailer.createTransport({
 exports.checkout = async (req, res) => {
     try {
         const { name, address, phone, city, postal, items } = req.body;
+        console.log(req.body);
         if (!name || !address || !phone || !city || !postal || !items || !items.length) {
             return res.status(400).json({ message: 'Missing order details.' });
         }
@@ -65,6 +66,7 @@ exports.checkout = async (req, res) => {
 
         res.json({ message: 'Order placed and email sent to owner!', orderId });
     } catch (err) {
+        console.log(err);
         res.status(500).json({ message: 'Server error.' });
     }
 }; 
