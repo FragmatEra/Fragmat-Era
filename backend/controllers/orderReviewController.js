@@ -7,13 +7,16 @@ exports.createReview = async (req, res) => {
         if (!name || !product || !rating || !text) {
             return res.status(400).json({ message: 'All fields are required.' });
         }
-        const review = new OrderReview({
-            user: req.user._id,
+        const reviewData = {
             name,
             product,
             rating,
             text
-        });
+        };
+        if (req.user && req.user._id) {
+            reviewData.user = req.user._id;
+        }
+        const review = new OrderReview(reviewData);
         await review.save();
         res.status(201).json(review);
     } catch (err) {
@@ -48,8 +51,8 @@ exports.deleteReview = async (req, res) => {
         const { id } = req.params;
         const review = await OrderReview.findById(id);
         if (!review) return res.status(404).json({ message: 'Review not found.' });
-        // Only allow owner to delete
-        if (review.user.toString() !== req.user._id.toString()) {
+        // Only allow owner to delete if review has a user
+        if (review.user && (!req.user || review.user.toString() !== req.user._id.toString())) {
             return res.status(403).json({ message: 'Not authorized.' });
         }
         await review.deleteOne();

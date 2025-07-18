@@ -1199,7 +1199,7 @@ For any questions regarding this Privacy Policy, you can contact us at:
 
     <script>
         // Set this to your backend base URL. For local: 'http://localhost:5000/api'. For prod: 'https://yourdomain.com/api'
-        const API_BASE_URL = 'https://fragment-era.vercel.app/api';
+        const API_BASE_URL = 'http://localhost:5000/api';
         const AUTH_API = `${API_BASE_URL}/auth`;
         const CART_API = `${API_BASE_URL}/cart`;
         const REVIEW_API = `${API_BASE_URL}/review`;
@@ -1255,7 +1255,13 @@ For any questions regarding this Privacy Policy, you can contact us at:
             localStorage.setItem('username', username);
             currentUser = username;
             updateAuthUI();
-            fetchCart();
+            // Only fetch cart from backend if logged in
+            if (isAuthenticated()) {
+                fetchCart();
+            } else {
+                cart = getLocalCart();
+                updateCart();
+            }
         }
 
         // Helper: Remove user on logout
@@ -1263,10 +1269,23 @@ For any questions regarding this Privacy Policy, you can contact us at:
             localStorage.removeItem('token');
             localStorage.removeItem('username');
             currentUser = null;
-            cart = [];
+            cart = getLocalCart();
             updateCart();
             updateAuthUI();
             showToast('Logged out successfully!');
+        }
+
+        // Helper: Get cart from localStorage
+        function getLocalCart() {
+            try {
+                return JSON.parse(localStorage.getItem('cart')) || [];
+            } catch {
+                return [];
+            }
+        }
+        // Helper: Save cart to localStorage
+        function saveLocalCart(cartArr) {
+            localStorage.setItem('cart', JSON.stringify(cartArr));
         }
 
         // Update UI for login/logout
@@ -1283,10 +1302,10 @@ For any questions regarding this Privacy Policy, you can contact us at:
             }
         }
 
-        // Fetch cart from backend
+        // Fetch cart from backend (only if logged in)
         async function fetchCart() {
             if (!isAuthenticated()) {
-                cart = [];
+                cart = getLocalCart();
                 updateCart();
                 return;
             }
@@ -1298,10 +1317,10 @@ For any questions regarding this Privacy Policy, you can contact us at:
                 if (res.ok) {
                     cart = await res.json();
                 } else {
-                    cart = [];
+                    cart = getLocalCart();
                 }
             } catch (err) {
-                cart = [];
+                cart = getLocalCart();
             }
             updateCart();
         }
@@ -1323,33 +1342,48 @@ For any questions regarding this Privacy Policy, you can contact us at:
             });
         }
 
-        // Add to cart (backend)
+        // Add to cart (localStorage for all, backend if logged in)
         async function addToCart(name, price, button) {
-            if (!isAuthenticated()) {
-                showToast('Please login to add items to the cart.');
-                toggleLogin();
-                return;
-            }
-            try {
-                const res = await fetch(`${CART_API}/add`, {
-                    method: 'POST',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ name, price })
-                });
-                if (res.ok) {
-                    cart = await res.json();
-                    updateCart();
-                    button.textContent = 'Added!';
-                    button.classList.add('added');
-                    setTimeout(() => {
-                        button.textContent = 'Add to Cart';
-                        button.classList.remove('added');
-                    }, 2000);
-                } else {
-                    showToast('Failed to add to cart.');
+            if (isAuthenticated()) {
+                try {
+                    const res = await fetch(`${CART_API}/add`, {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ name, price })
+                    });
+                    if (res.ok) {
+                        cart = await res.json();
+                        updateCart();
+                        button.textContent = 'Added!';
+                        button.classList.add('added');
+                        setTimeout(() => {
+                            button.textContent = 'Add to Cart';
+                            button.classList.remove('added');
+                        }, 2000);
+                    } else {
+                        showToast('Failed to add to cart.');
+                    }
+                } catch (err) {
+                    showToast('Server error.');
                 }
-            } catch (err) {
-                showToast('Server error.');
+            } else {
+                // Guest: update local cart
+                let localCart = getLocalCart();
+                const existing = localCart.find(item => item.name === name);
+                if (existing) {
+                    existing.quantity = (existing.quantity || 1) + 1;
+                } else {
+                    localCart.push({ name, price, quantity: 1 });
+                }
+                saveLocalCart(localCart);
+                cart = localCart;
+                updateCart();
+                button.textContent = 'Added!';
+                button.classList.add('added');
+                setTimeout(() => {
+                    button.textContent = 'Add to Cart';
+                    button.classList.remove('added');
+                }, 2000);
             }
         }
 
@@ -1393,40 +1427,46 @@ For any questions regarding this Privacy Policy, you can contact us at:
             } else {
                 cartContent.appendChild(summaryDiv);
             }
-        }
-
-        // Remove from cart (backend)
-        async function removeFromCart(name) {
-            if (!isAuthenticated()) return;
-            try {
-                const res = await fetch(`${CART_API}/remove`, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders(),
-                    body: JSON.stringify({ name })
-                });
-                if (res.ok) {
-                    cart = await res.json();
-                    updateCart();
-                } else {
-                    showToast('Failed to remove from cart.');
-                }
-            } catch (err) {
-                showToast('Server error.');
+            // Save cart to localStorage if not logged in
+            if (!isAuthenticated()) {
+                saveLocalCart(cart);
             }
         }
 
-        // Toggle cart modal
+        // Remove from cart (localStorage for guests, backend for logged in)
+        async function removeFromCart(name) {
+            if (isAuthenticated()) {
+                try {
+                    const res = await fetch(`${CART_API}/remove`, {
+                        method: 'DELETE',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ name })
+                    });
+                    if (res.ok) {
+                        cart = await res.json();
+                        updateCart();
+                    } else {
+                        showToast('Failed to remove from cart.');
+                    }
+                } catch (err) {
+                    showToast('Server error.');
+                }
+            } else {
+                let localCart = getLocalCart();
+                localCart = localCart.filter(item => item.name !== name);
+                saveLocalCart(localCart);
+                cart = localCart;
+                updateCart();
+            }
+        }
+
+        // Toggle cart modal (no login required)
         function toggleCart() {
             const cartModal = document.getElementById('cart-modal');
-            if (!isAuthenticated()) {
-                showToast('Please login to access the cart.');
-                toggleLogin();
-                return;
-            }
             cartModal.style.display = cartModal.style.display === 'flex' ? 'none' : 'flex';
         }
 
-        // Toggle login modal
+        // Toggle login modal (only for review submission or explicit click)
         function toggleLogin() {
             const loginModal = document.getElementById('login-modal');
             loginModal.classList.toggle('active');
@@ -1544,11 +1584,7 @@ For any questions regarding this Privacy Policy, you can contact us at:
                 showToast('Your cart is empty!');
                 return;
             }
-            if (!isAuthenticated()) {
-                showToast('Please login to place an order.');
-                toggleLogin();
-                return;
-            }
+            // No login required for checkout
             const name = document.getElementById('customer-name').value.trim();
             const address = document.getElementById('customer-address').value.trim();
             const phone = document.getElementById('customer-phone').value.trim();
@@ -1560,13 +1596,19 @@ For any questions regarding this Privacy Policy, you can contact us at:
                 showToast('Please fill out all checkout fields.');
                 return;
             }
+            // Email format validation
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailPattern.test(email)) {
+                showToast('Please enter a valid email address.');
+                return;
+            }
 
             // Send order to backend
             fetch(`${ORDER_API}/checkout`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    ...(isAuthenticated() ? { 'Authorization': 'Bearer ' + localStorage.getItem('token') } : {})
                 },
                 body: JSON.stringify({
                     name,
@@ -1591,6 +1633,10 @@ For any questions regarding this Privacy Policy, you can contact us at:
                     document.getElementById('checkout-form').reset();
                     updateCart();
                     toggleCart();
+                    // Clear guest cart from localStorage
+                    if (!isAuthenticated()) {
+                        saveLocalCart([]);
+                    }
                 } else {
                     showToast(data.message || 'Failed to place order.');
                 }
@@ -1617,11 +1663,7 @@ For any questions regarding this Privacy Policy, you can contact us at:
 
         // Submit order review to backend
         async function submitOrderReview() {
-            if (!isAuthenticated()) {
-                showToast('Please login to submit an order review.');
-                toggleLogin();
-                return;
-            }
+            // No login required for review
             const name = document.getElementById('order-review-name').value.trim();
             const product = document.getElementById('order-review-product').value.trim();
             const text = document.getElementById('order-review-text').value.trim();
@@ -1630,7 +1672,7 @@ For any questions regarding this Privacy Policy, you can contact us at:
                 try {
                     const res = await fetch(REVIEW_API, {
                         method: 'POST',
-                        headers: getAuthHeaders(),
+                        headers: { 'Content-Type': 'application/json', ...(isAuthenticated() ? getAuthHeaders() : {}) },
                         body: JSON.stringify({ name, product, rating, text })
                     });
                     if (res.ok) {

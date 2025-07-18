@@ -54,12 +54,14 @@ exports.checkout = async (req, res) => {
             });
         }
 
-        // Clear the user's cart in the database
+        // Clear the user's cart in the database (only if logged in)
         const Cart = require('../models/Cart');
-        await Cart.findOneAndUpdate(
-            { user: req.user._id },
-            { $set: { items: [] } }
-        );
+        if (req.user && req.user._id) {
+            await Cart.findOneAndUpdate(
+                { user: req.user._id },
+                { $set: { items: [] } }
+            );
+        }
 
         res.json({ message: 'Order placed and email sent to owner!', orderId });
     } catch (err) {

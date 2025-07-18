@@ -3,8 +3,8 @@ const router = express.Router();
 const reviewController = require('../controllers/orderReviewController');
 const auth = require('../middlewares/auth');
 
-// Create review (auth required)
-router.post('/', auth, reviewController.createReview);
+// Create review (no auth required)
+router.post('/', reviewController.createReview);
 // Get all reviews
 router.get('/', reviewController.getAllReviews);
 // Get reviews by product
