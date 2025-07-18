@@ -25,6 +25,11 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/order', orderRoutes);
 app.use('/api/review', reviewRoutes);
 
+// Health check route
+app.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Backend is running!' });
+});
+
 // MongoDB connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fragmetera';
 mongoose.connect(MONGO_URI)
